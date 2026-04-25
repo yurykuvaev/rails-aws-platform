@@ -2,7 +2,8 @@
 .terraform/
 *.tfstate
 *.tfstate.*
-.terraform.lock.hcl
+# .terraform.lock.hcl IS committed on purpose: pins provider versions for
+# reproducible runs across machines and CI.
 *.tfvars
 !*.tfvars.example
 crash.log
