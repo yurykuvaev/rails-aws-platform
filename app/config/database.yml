@@ -1,0 +1,22 @@
+default: &default
+  adapter: mysql2
+  encoding: utf8mb4
+  # Pool deliberately small (5) — useful for triggering connection
+  # exhaustion in debug exercises.
+  pool: 5
+
+development:
+  <<: *default
+  url: <%= ENV.fetch("DATABASE_URL", "mysql2://root:password@127.0.0.1:3306/pokemon_battle_development") %>
+
+test:
+  <<: *default
+  database: pokemon_battle_test
+  username: <%= ENV.fetch("MYSQL_USER", "root") %>
+  password: <%= ENV.fetch("MYSQL_PASSWORD", "test") %>
+  host:     <%= ENV.fetch("DB_HOST", "127.0.0.1") %>
+  port:     3306
+
+production:
+  <<: *default
+  url: <%= ENV.fetch("DATABASE_URL") %>

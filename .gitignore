@@ -1,0 +1,29 @@
+# ---------- Terraform ----------
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+*.tfvars
+!*.tfvars.example
+crash.log
+crash.*.log
+
+# ---------- Rails ----------
+log/
+tmp/
+.bundle/
+vendor/bundle/
+config/master.key
+config/credentials/*.key
+*.sqlite3
+storage/
+coverage/
+.rspec_status
+node_modules/
+
+# ---------- General ----------
+.DS_Store
+.idea/
+.vscode/
+.cursor/
+*.swp

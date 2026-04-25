@@ -1,0 +1,254 @@
+name: App CI/CD
+
+# Triggers only on app code or pipeline file changes. Infra-only edits
+# in infra/** do not run this workflow.
+on:
+  push:
+    branches:
+      - "**"
+    paths:
+      - "app/**"
+      - ".github/workflows/deploy.yml"
+  pull_request:
+    paths:
+      - "app/**"
+
+# Prevent concurrent deploys to the same ref. A queued run waits rather
+# than cancelling so a mid-deploy run is never interrupted.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ──────────────────────────────────────────────
+  # JOB 1: Run the test suite against a real MySQL
+  # ──────────────────────────────────────────────
+  test:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./app
+
+    env:
+      DATABASE_URL: mysql2://root:test@127.0.0.1:3306/rails_test
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test
+          MYSQL_DATABASE: rails_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version-file: app/.ruby-version
+          bundler-cache: true
+          working-directory: ./app
+
+      - name: Set up database
+        run: bundle exec rails db:create db:migrate
+
+      - name: Run RSpec
+        run: bundle exec rspec
+
+  # ──────────────────────────────────────────────
+  # JOB 2: Build Docker image
+  #   • PR to main:   build only (validates Dockerfile)
+  #   • Push to main: build AND push to ECR
+  # ──────────────────────────────────────────────
+  build:
+    needs: test
+    if: |
+      (github.event_name == 'pull_request' && github.base_ref == 'main') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    outputs:
+      short_sha: ${{ steps.meta.outputs.short_sha }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assume AWS deploy role via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: gha-build-${{ github.run_id }}
+          role-duration-seconds: 1800
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Log in to ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Compute short SHA
+        id: meta
+        run: echo "short_sha=${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
+
+      - name: Build (and push on main) image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./app
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: |
+            ${{ secrets.ECR_REPOSITORY }}:${{ steps.meta.outputs.short_sha }}
+            ${{ secrets.ECR_REPOSITORY }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ──────────────────────────────────────────────
+  # JOB 3: Deploy to EC2 via SSM (manual approval)
+  # ──────────────────────────────────────────────
+  deploy:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    # GitHub pauses here until a required reviewer approves the run.
+    # Configure reviewers in repo settings → Environments → production.
+    environment: production
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Assume AWS deploy role via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: gha-deploy-${{ github.run_id }}
+          role-duration-seconds: 1800
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # The remote script is built locally via envsubst (only runner-side
+      # vars are substituted), then injected into the SSM parameters JSON
+      # via jq so all quoting/escaping is handled correctly.
+      - name: Send deploy command via SSM
+        id: ssm
+        env:
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ needs.build.outputs.short_sha }}
+          DB_SECRET_ARN: ${{ secrets.DB_SECRET_ARN }}
+          EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+        run: |
+          set -euo pipefail
+
+          export ECR_REGISTRY="${ECR_REPOSITORY%%/*}"
+          export IMAGE="${ECR_REPOSITORY}:${IMAGE_TAG}"
+
+          cat > /tmp/deploy.sh <<'SCRIPT'
+          set -e
+
+          aws ecr get-login-password --region us-east-1 \
+            | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+
+          docker pull "$IMAGE"
+
+          DB_CREDS=$(aws secretsmanager get-secret-value \
+            --secret-id "$DB_SECRET_ARN" \
+            --query SecretString --output text)
+          DB_USER=$(echo "$DB_CREDS" | jq -r .username)
+          DB_PASS=$(echo "$DB_CREDS" | jq -r .password)
+
+          RDS_ENDPOINT=$(aws rds describe-db-instances \
+            --query "DBInstances[0].Endpoint.Address" --output text)
+
+          DATABASE_URL="mysql2://${DB_USER}:${DB_PASS}@${RDS_ENDPOINT}:3306/rails_production"
+
+          # 60s timeout gives Rails time to finish in-flight requests
+          docker stop -t 60 rails-app || true
+          docker rm rails-app || true
+
+          docker run -d \
+            --name rails-app \
+            --restart unless-stopped \
+            -p 3000:3000 \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -e RAILS_ENV=production \
+            "$IMAGE"
+
+          # Poll /health for up to 60s instead of a blind sleep
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/health; then
+              echo "Health check passed after ${i} attempts."
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "Health check failed. Container logs:"
+          docker logs rails-app
+          exit 1
+          SCRIPT
+
+          # Substitute ONLY the runner-side vars; bash vars in the script
+          # (DB_USER, DATABASE_URL, etc.) are left intact for the EC2.
+          envsubst '$ECR_REGISTRY $IMAGE $DB_SECRET_ARN' \
+            < /tmp/deploy.sh > /tmp/deploy.resolved.sh
+
+          jq -n --rawfile script /tmp/deploy.resolved.sh \
+            '{commands: [$script]}' > /tmp/params.json
+
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$EC2_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --parameters file:///tmp/params.json \
+            --query "Command.CommandId" \
+            --output text)
+
+          echo "command_id=${COMMAND_ID}" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for SSM command to complete
+        env:
+          COMMAND_ID: ${{ steps.ssm.outputs.command_id }}
+          INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+        run: |
+          echo "Polling SSM command ${COMMAND_ID} (max 5 minutes)..."
+          DEADLINE=$((SECONDS + 300))
+
+          while [ $SECONDS -lt $DEADLINE ]; do
+            RESULT=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE_ID" \
+              --output json)
+
+            STATUS=$(echo "$RESULT" | jq -r .Status)
+            echo "  status: $STATUS"
+
+            if [ "$STATUS" = "Success" ]; then
+              echo "Deploy succeeded."
+              exit 0
+            fi
+
+            if [ "$STATUS" = "Failed" ] || [ "$STATUS" = "TimedOut" ]; then
+              echo "Deploy failed with status: $STATUS"
+              echo "--- stderr ---"
+              echo "$RESULT" | jq -r .StandardErrorContent
+              exit 1
+            fi
+
+            # InProgress / Pending — keep waiting
+            sleep 10
+          done
+
+          echo "Timed out waiting for SSM command to complete."
+          exit 1

@@ -1,0 +1,35 @@
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: pokemon_battle_development
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-ppassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      args:
+        # Empty = install ALL groups including faker, rspec, factory_bot.
+        # Production CI builds use the Dockerfile default ("development:test").
+        BUNDLE_WITHOUT: ""
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: mysql2://root:password@db:3306/pokemon_battle_development
+      RAILS_ENV: development
+      RAILS_LOG_TO_STDOUT: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  mysql_data:

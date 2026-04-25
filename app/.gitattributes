@@ -1,0 +1,12 @@
+* text=auto eol=lf
+
+# Force LF on shell-executable files no matter what OS clones the repo
+bin/*       text eol=lf
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+Gemfile     text eol=lf
+Gemfile.lock text eol=lf
+config.ru   text eol=lf
+Rakefile    text eol=lf
