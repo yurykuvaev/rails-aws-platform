@@ -4,6 +4,8 @@ A minimal Rails 7 JSON API: turn-based Pokemon-style battles with persistent cha
 
 **Stack:** Rails 7.1 · Ruby 3.2 · MySQL 8 · Puma · RSpec · Docker.
 
+**Live (dev):** http://rails-app-dev-alb-92563372.us-east-1.elb.amazonaws.com — try `GET /health`.
+
 ## Quick start
 
 Only Docker Desktop is required — no local Ruby or MySQL.
