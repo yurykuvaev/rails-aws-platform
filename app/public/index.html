@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pokeapi Battle Arena</title>
+<style>
+  :root {
+    --bg:        #0f172a;
+    --panel:     #1e293b;
+    --panel-2:   #273449;
+    --border:    #334155;
+    --text:      #e2e8f0;
+    --text-dim:  #94a3b8;
+    --accent:    #f59e0b;
+    --good:      #22c55e;
+    --bad:       #ef4444;
+    --fire:      #f97316;
+    --water:     #3b82f6;
+    --grass:     #22c55e;
+    --electric:  #eab308;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+
+  header h1 {
+    margin: 0;
+    font-size: 18px;
+    letter-spacing: 0.04em;
+  }
+
+  header h1 .accent { color: var(--accent); }
+
+  .user-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+
+  .api-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--bad);
+  }
+  .api-dot.ok { background: var(--good); }
+
+  main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  @media (max-width: 800px) {
+    main { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+
+  .card h2 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    border-bottom: 1px dashed var(--border);
+    padding-bottom: 8px;
+  }
+
+  .card.full-row { grid-column: 1 / -1; }
+
+  /* Forms */
+  form { display: flex; flex-direction: column; gap: 10px; }
+  form .row { display: flex; gap: 8px; }
+  input, select, button {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-family: inherit;
+    font-size: 13px;
+  }
+  input:focus, select:focus { outline: 2px solid var(--accent); }
+  button {
+    cursor: pointer;
+    background: var(--accent);
+    color: #1e1b00;
+    border: none;
+    font-weight: 700;
+  }
+  button:hover { filter: brightness(1.1); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.secondary {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    font-weight: 500;
+  }
+  button.danger { background: var(--bad); color: #fff; }
+
+  /* Element badges */
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #1e1b00;
+  }
+  .badge.fire     { background: var(--fire);     color: #fff; }
+  .badge.water    { background: var(--water);    color: #fff; }
+  .badge.grass    { background: var(--grass);    color: #1e1b00; }
+  .badge.electric { background: var(--electric); color: #1e1b00; }
+
+  /* Character row */
+  .char {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 8px;
+    background: var(--panel-2);
+  }
+  .char.dead { opacity: 0.5; }
+  .char-name {
+    font-size: 14px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .char-stats {
+    color: var(--text-dim);
+    font-size: 12px;
+    margin-top: 4px;
+  }
+  .char-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: stretch;
+  }
+  .char-actions button {
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+
+  /* HP bar */
+  .hp-bar {
+    width: 100%;
+    height: 6px;
+    background: #0f172a;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 4px;
+  }
+  .hp-fill {
+    height: 100%;
+    background: var(--good);
+    transition: width 0.3s, background 0.3s;
+  }
+  .hp-fill.low  { background: var(--accent); }
+  .hp-fill.crit { background: var(--bad); }
+
+  /* Leaderboard */
+  .lb-row {
+    display: grid;
+    grid-template-columns: 24px 1fr auto auto;
+    gap: 8px;
+    align-items: center;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .lb-row:last-child { border-bottom: none; }
+  .lb-row .rank { color: var(--text-dim); text-align: right; }
+  .lb-row .wl { color: var(--text-dim); font-size: 12px; }
+  .lb-row button { padding: 3px 8px; font-size: 11px; }
+  .lb-row .owner { color: var(--text-dim); font-size: 11px; }
+
+  /* Battle log */
+  .battle-banner {
+    padding: 12px;
+    background: var(--panel-2);
+    border-radius: 6px;
+    margin-bottom: 12px;
+    text-align: center;
+  }
+  .battle-banner .vs {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 4px 0;
+  }
+  .battle-banner.winner-you  { background: rgba(34,197,94,0.15); border: 1px solid var(--good); }
+  .battle-banner.winner-them { background: rgba(239,68,68,0.15); border: 1px solid var(--bad); }
+
+  .turn-log {
+    max-height: 320px;
+    overflow-y: auto;
+    background: #0a0f1d;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 12px;
+  }
+  .turn-line {
+    padding: 4px 0;
+    border-bottom: 1px dotted var(--border);
+  }
+  .turn-line:last-child { border-bottom: none; }
+  .turn-line.crit { color: var(--accent); font-weight: 700; }
+  .turn-line .num { color: var(--text-dim); }
+
+  .battle-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    justify-content: center;
+  }
+
+  /* Toast */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    padding: 12px 16px;
+    border-radius: 4px;
+    max-width: 320px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    z-index: 100;
+  }
+  #toast.show { opacity: 1; }
+  #toast.error { border-left-color: var(--bad); }
+
+  .empty { color: var(--text-dim); font-style: italic; padding: 12px; text-align: center; }
+
+  .hidden { display: none !important; }
+
+  small.note { color: var(--text-dim); font-size: 11px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span class="accent">★</span> POKEAPI <span class="accent">BATTLE ARENA</span></h1>
+  <div class="user-info">
+    <span class="api-dot" id="apiDot"></span>
+    <span id="userLabel">not logged in</span>
+    <button class="secondary hidden" id="logoutBtn">logout</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- LEFT COLUMN -->
+  <section class="card" id="authCard">
+    <h2>Login / Signup</h2>
+    <form id="signupForm">
+      <label>
+        Username
+        <input type="text" id="usernameInput" placeholder="e.g. ash_ketchum" required minlength="2" maxlength="32" />
+      </label>
+      <button type="submit">Create player & enter</button>
+      <small class="note">No password. Player creation returns an API token stored in this browser.</small>
+    </form>
+  </section>
+
+  <section class="card hidden" id="rosterCard">
+    <h2>My Roster <small class="note" id="rosterCount"></small></h2>
+    <div id="rosterList"></div>
+    <form id="createCharForm" style="margin-top:12px;">
+      <div class="row">
+        <input type="text" id="charNameInput" placeholder="Character name" required />
+        <select id="charElementInput" required>
+          <option value="fire">Fire</option>
+          <option value="water">Water</option>
+          <option value="grass">Grass</option>
+          <option value="electric">Electric</option>
+        </select>
+        <button type="submit">+ Create</button>
+      </div>
+      <small class="note">Max 5 characters per player.</small>
+    </form>
+  </section>
+
+  <!-- RIGHT COLUMN -->
+  <section class="card" id="leaderboardCard">
+    <h2>Leaderboard <button class="secondary" id="refreshLbBtn" style="float:right; padding:2px 8px; font-size:11px;">refresh</button></h2>
+    <div id="leaderboardList"><div class="empty">Loading…</div></div>
+  </section>
+
+  <section class="card hidden full-row" id="battleCard">
+    <h2>Battle <small class="note" id="battleIdLabel"></small></h2>
+    <div id="battleBanner"></div>
+    <div class="turn-log" id="turnLog"></div>
+    <div class="battle-actions">
+      <button id="attackBtn">⚔ Attack!</button>
+      <button class="secondary" id="endBattleBtn">Close battle</button>
+    </div>
+  </section>
+
+</main>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+/* ───────────────────────────────────────────── State ─────────── */
+
+const state = {
+  apiToken:        localStorage.getItem("apiToken") || null,
+  player:          null,                 // {id, username, characters:[]}
+  leaderboard:     [],                   // raw API rows
+  charactersById:  Object.create(null),  // cache: {id: {name, element, owner}}
+  battle:          null,                 // {id, attacker_id, defender_id, ...}
+  battleTurns:     [],                   // accumulated turns
+};
+
+const ELEMENTS = ["fire", "water", "grass", "electric"];
+
+/* ───────────────────────────────────────────── Helpers ─────── */
+
+function $(sel) { return document.querySelector(sel); }
+function el(tag, attrs = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") node.className = v;
+    else if (k === "html") node.innerHTML = v;
+    else if (k.startsWith("on") && typeof v === "function") node.addEventListener(k.slice(2), v);
+    else node.setAttribute(k, v);
+  }
+  for (const c of children) {
+    if (c == null) continue;
+    node.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  }
+  return node;
+}
+
+let toastTimer = null;
+function toast(message, kind = "info") {
+  const t = $("#toast");
+  t.textContent = message;
+  t.classList.toggle("error", kind === "error");
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 3500);
+}
+
+async function api(path, { method = "GET", body = null, auth = true } = {}) {
+  const headers = { "Accept": "application/json" };
+  if (body) headers["Content-Type"] = "application/json";
+  if (auth && state.apiToken) headers["X-Api-Token"] = state.apiToken;
+
+  const res = await fetch(path, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : null,
+  });
+
+  let data = null;
+  try { data = await res.json(); } catch (_) { /* may be empty */ }
+
+  if (!res.ok) {
+    const msg = (data && data.error) || `HTTP ${res.status}`;
+    const err = new Error(msg);
+    err.status = res.status;
+    err.data = data;
+    throw err;
+  }
+  return data;
+}
+
+/* Cache name lookups so the battle log can show real names */
+function cacheCharacters(arr) {
+  for (const c of arr || []) {
+    if (!c || c.id == null) continue;
+    state.charactersById[c.id] = {
+      id: c.id,
+      name: c.name,
+      element: c.element,
+      owner: c.owner || null,
+      player_id: c.player_id ?? null,
+    };
+  }
+}
+
+function charLabel(id) {
+  const c = state.charactersById[id];
+  return c ? c.name : `#${id}`;
+}
+
+/* ───────────────────────────────────────────── Health ──────── */
+
+async function pingHealth() {
+  try {
+    await fetch("/health", { method: "GET" });
+    $("#apiDot").classList.add("ok");
+  } catch {
+    $("#apiDot").classList.remove("ok");
+  }
+}
+
+/* ───────────────────────────────────────────── Auth ────────── */
+
+async function loadCurrentPlayer() {
+  if (!state.apiToken) return;
+  try {
+    const me = await api("/players/me");
+    state.player = me;
+    cacheCharacters(me.characters);
+  } catch (e) {
+    if (e.status === 401) {
+      localStorage.removeItem("apiToken");
+      state.apiToken = null;
+      state.player = null;
+      toast("Saved token was rejected — please sign in again.", "error");
+    } else {
+      throw e;
+    }
+  }
+}
+
+async function signup(username) {
+  const res = await api("/players", { method: "POST", body: { username }, auth: false });
+  state.apiToken = res.api_token;
+  localStorage.setItem("apiToken", state.apiToken);
+  await loadCurrentPlayer();
+}
+
+function logout() {
+  localStorage.removeItem("apiToken");
+  state.apiToken = null;
+  state.player = null;
+  state.battle = null;
+  state.battleTurns = [];
+  render();
+  toast("Logged out");
+}
+
+/* ───────────────────────────────────────────── Roster ──────── */
+
+async function createCharacter(name, element) {
+  const c = await api("/characters", { method: "POST", body: { name, element } });
+  await loadCurrentPlayer();
+  return c;
+}
+
+async function healCharacter(id) {
+  try {
+    await api(`/characters/${id}/heal`, { method: "POST" });
+    toast("Healed to full HP");
+    await loadCurrentPlayer();
+    render();
+  } catch (e) {
+    if (e.status === 429) {
+      const sec = e.data?.retry_after_seconds ?? "?";
+      toast(`Heal cooldown — try again in ${sec}s`, "error");
+    } else {
+      toast(e.message, "error");
+    }
+  }
+}
+
+/* ───────────────────────────────────────────── Battle ──────── */
+
+async function startBattle(defenderId) {
+  if (!state.player) return toast("Sign in first", "error");
+
+  const aliveOwn = state.player.characters.filter(c => c.is_alive);
+  if (!aliveOwn.length) return toast("All your characters are KO'd. Heal first.", "error");
+
+  let attackerId;
+  if (aliveOwn.length === 1) {
+    attackerId = aliveOwn[0].id;
+  } else {
+    const choice = prompt(
+      "Pick your attacker:\n" + aliveOwn.map((c, i) =>
+        `${i + 1}. ${c.name} (${c.element}) HP ${c.current_hp}/${c.max_hp}`
+      ).join("\n")
+    );
+    const idx = parseInt(choice, 10) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= aliveOwn.length) return;
+    attackerId = aliveOwn[idx].id;
+  }
+
+  try {
+    const b = await api("/battles", {
+      method: "POST",
+      body: { attacker_character_id: attackerId, defender_character_id: defenderId },
+    });
+    state.battle = b;
+    state.battleTurns = [];
+    render();
+    $("#battleCard").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (e) {
+    toast(e.message, "error");
+  }
+}
+
+async function attack() {
+  if (!state.battle) return;
+  try {
+    const res = await api(`/battles/${state.battle.id}/attack`, { method: "POST" });
+    state.battle = res.battle;
+    state.battleTurns.push(res.turn);
+    if (state.battle.status === "completed") {
+      await loadCurrentPlayer();
+      await loadLeaderboard();
+    }
+    render();
+  } catch (e) {
+    toast(e.message, "error");
+  }
+}
+
+function endBattle() {
+  state.battle = null;
+  state.battleTurns = [];
+  render();
+}
+
+/* ───────────────────────────────────────────── Leaderboard ── */
+
+async function loadLeaderboard() {
+  try {
+    const rows = await api("/leaderboard", { auth: false });
+    state.leaderboard = rows;
+    cacheCharacters(rows);
+  } catch (e) {
+    toast("Failed to load leaderboard: " + e.message, "error");
+  }
+}
+
+/* ───────────────────────────────────────────── Render ──────── */
+
+function hpFillClass(curr, max) {
+  const pct = max ? (curr / max) : 0;
+  if (pct > 0.5) return "";
+  if (pct > 0.2) return "low";
+  return "crit";
+}
+
+function renderHeader() {
+  if (state.player) {
+    $("#userLabel").textContent = state.player.username;
+    $("#logoutBtn").classList.remove("hidden");
+  } else {
+    $("#userLabel").textContent = "not logged in";
+    $("#logoutBtn").classList.add("hidden");
+  }
+}
+
+function renderAuthCard() {
+  $("#authCard").classList.toggle("hidden", !!state.player);
+}
+
+function renderRoster() {
+  const card = $("#rosterCard");
+  card.classList.toggle("hidden", !state.player);
+  if (!state.player) return;
+
+  const list = $("#rosterList");
+  list.innerHTML = "";
+
+  const chars = state.player.characters || [];
+  $("#rosterCount").textContent = `(${chars.length}/5)`;
+
+  if (chars.length === 0) {
+    list.append(el("div", { class: "empty" }, "No characters yet — create one below."));
+    return;
+  }
+
+  for (const c of chars) {
+    const row = el("div", { class: "char" + (c.is_alive ? "" : " dead") });
+
+    const left = el("div");
+    left.append(
+      el("div", { class: "char-name" },
+        c.name,
+        el("span", { class: "badge " + c.element }, c.element),
+        c.is_alive ? null : el("span", { class: "badge", style: "background:#475569;color:#fff;" }, "KO"),
+      ),
+      el("div", { class: "char-stats" },
+        `Lv ${c.level} • W ${c.wins} / L ${c.losses} • HP ${c.current_hp}/${c.max_hp}`
+      ),
+    );
+    const bar = el("div", { class: "hp-bar" });
+    bar.append(el("div", {
+      class: "hp-fill " + hpFillClass(c.current_hp, c.max_hp),
+      style: `width:${Math.max(0, (c.current_hp / c.max_hp) * 100)}%`,
+    }));
+    left.append(bar);
+
+    const actions = el("div", { class: "char-actions" });
+    const healBtn = el("button", { class: "secondary", onclick: () => healCharacter(c.id) }, "♥ Heal");
+    actions.append(healBtn);
+
+    row.append(left, actions);
+    list.append(row);
+  }
+}
+
+function renderLeaderboard() {
+  const list = $("#leaderboardList");
+  list.innerHTML = "";
+
+  if (!state.leaderboard.length) {
+    list.append(el("div", { class: "empty" }, "No characters yet."));
+    return;
+  }
+
+  state.leaderboard.forEach((c, i) => {
+    const row = el("div", { class: "lb-row" });
+    row.append(
+      el("span", { class: "rank" }, `#${i + 1}`),
+      (() => {
+        const name = el("span");
+        name.append(
+          c.name + " ",
+          el("span", { class: "badge " + c.element }, c.element),
+        );
+        const owner = el("div", { class: "owner" }, "by " + c.owner);
+        const wrap = el("div");
+        wrap.append(name, owner);
+        return wrap;
+      })(),
+      el("span", { class: "wl" }, `${c.wins}W / ${c.losses}L`),
+      (() => {
+        const isMine = state.player && c.player_id === state.player.id;
+        const canFight = state.player && !isMine && c.is_alive;
+        if (isMine) return el("span", { class: "owner" }, "(yours)");
+        if (!c.is_alive) return el("span", { class: "owner" }, "KO");
+        if (!state.player) return el("span", { class: "owner" }, "log in");
+        return el("button", { onclick: () => startBattle(c.id) }, "⚔ Fight");
+      })(),
+    );
+    list.append(row);
+  });
+}
+
+function renderBattle() {
+  const card = $("#battleCard");
+  card.classList.toggle("hidden", !state.battle);
+  if (!state.battle) return;
+
+  const b = state.battle;
+  $("#battleIdLabel").textContent = `(battle #${b.id} • turn ${b.turn_count})`;
+
+  const banner = $("#battleBanner");
+  banner.innerHTML = "";
+  banner.className = "battle-banner";
+  if (b.status === "completed") {
+    const youWon = b.winner_id === b.attacker_id;
+    banner.classList.add(youWon ? "winner-you" : "winner-them");
+    banner.append(
+      el("div", { class: "vs" }, youWon ? "★ Victory" : "✖ Defeat"),
+      el("div", {}, `Winner: ${charLabel(b.winner_id)}`),
+    );
+    $("#attackBtn").disabled = true;
+  } else {
+    banner.append(
+      el("div", { class: "vs" }, `${charLabel(b.attacker_id)}  vs  ${charLabel(b.defender_id)}`),
+      el("div", {}, `Status: ${b.status}`),
+    );
+    $("#attackBtn").disabled = false;
+  }
+
+  const log = $("#turnLog");
+  log.innerHTML = "";
+  if (!state.battleTurns.length) {
+    log.append(el("div", { class: "empty" }, "No turns yet — press Attack."));
+  } else {
+    for (const t of state.battleTurns) {
+      const line = el("div", { class: "turn-line" + (t.critical_hit ? " crit" : "") });
+      line.append(
+        el("span", { class: "num" }, `T${t.turn_number} `),
+        `${charLabel(t.attacker_id)} → ${charLabel(t.defender_id)}: ${t.damage} dmg`,
+        t.critical_hit ? "  ✦ CRIT" : "",
+        ` (defender HP: ${t.defender_hp})`,
+      );
+      log.append(line);
+    }
+    log.scrollTop = log.scrollHeight;
+  }
+}
+
+function render() {
+  renderHeader();
+  renderAuthCard();
+  renderRoster();
+  renderLeaderboard();
+  renderBattle();
+}
+
+/* ───────────────────────────────────────────── Wiring ──────── */
+
+$("#signupForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const username = $("#usernameInput").value.trim();
+  if (!username) return;
+  try {
+    await signup(username);
+    await loadLeaderboard();
+    render();
+    toast(`Welcome, ${state.player.username}!`);
+  } catch (err) {
+    toast(err.message, "error");
+  }
+});
+
+$("#logoutBtn").addEventListener("click", logout);
+
+$("#createCharForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = $("#charNameInput").value.trim();
+  const element = $("#charElementInput").value;
+  if (!name || !ELEMENTS.includes(element)) return;
+  try {
+    await createCharacter(name, element);
+    $("#charNameInput").value = "";
+    await loadLeaderboard();
+    render();
+    toast(`${name} the ${element} joined the roster.`);
+  } catch (err) {
+    toast(err.message, "error");
+  }
+});
+
+$("#refreshLbBtn").addEventListener("click", async () => {
+  await loadLeaderboard();
+  render();
+});
+
+$("#attackBtn").addEventListener("click", attack);
+$("#endBattleBtn").addEventListener("click", endBattle);
+
+/* ───────────────────────────────────────────── Boot ────────── */
+
+(async function boot() {
+  pingHealth();
+  setInterval(pingHealth, 15000);
+
+  await loadCurrentPlayer();
+  await loadLeaderboard();
+  render();
+})();
+
+</script>
+
+</body>
+</html>

@@ -6,12 +6,15 @@ class LeaderboardController < ApplicationController
 
     render json: characters.map { |c|
       {
-        name:     c.name,
-        level:    c.level,
-        wins:     c.wins,
-        losses:   c.losses,
-        element:  c.element,
-        owner:    c.player.username
+        id:        c.id,
+        player_id: c.player_id,
+        name:      c.name,
+        level:     c.level,
+        wins:      c.wins,
+        losses:    c.losses,
+        element:   c.element,
+        is_alive:  c.is_alive,
+        owner:     c.player.username
       }
     }
   end
