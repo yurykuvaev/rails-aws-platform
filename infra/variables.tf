@@ -15,5 +15,5 @@ variable "project_name" {
 
 variable "github_repo" {
   type    = string
-  default = "myorg/myrepo"
+  default = "yurykuvaev/rails-aws-platform"
 }
