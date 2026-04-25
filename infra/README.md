@@ -31,7 +31,7 @@ Terraform infrastructure for **rails-aws-platform**.
 
 | File | What |
 |---|---|
-| `versions.tf`     | Terraform 1.5+, AWS ~> 5.0, Random ~> 3.0 |
+| `versions.tf`     | Terraform 1.10+, AWS ~> 5.0, Random ~> 3.0; S3 backend with native lockfile |
 | `variables.tf`    | `aws_region`, `environment`, `project_name`, `github_repo` |
 | `networking.tf`   | VPC, IGW, NAT GW, public/private subnets, route tables |
 | `security.tf`     | Security groups: `alb`, `ec2`, `rds` (chained by SG ID) |
@@ -43,6 +43,12 @@ Terraform infrastructure for **rails-aws-platform**.
 | `cloudwatch.tf`   | Log group `/rails-app/dev`, 30-day retention |
 | `github_oidc.tf`  | OIDC provider + deploy role scoped to `repo:<github_repo>:ref:refs/heads/main` |
 | `outputs.tf`      | ALB DNS, ECR URL, EC2 instance ID/IP, RDS endpoint, secret ARN, deploy role ARN |
+
+## State backend
+
+State lives in S3 (`s3://tf-state-yury/rails-aws-platform/infra/terraform.tfstate`)
+with native S3 locking (`use_lockfile = true`, no DynamoDB table required).
+Bucket has versioning + AES256 encryption enabled.
 
 ## Setup
 
