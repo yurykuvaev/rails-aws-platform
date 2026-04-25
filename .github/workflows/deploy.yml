@@ -149,6 +149,10 @@ jobs:
           IMAGE_TAG: ${{ needs.build.outputs.short_sha }}
           DB_SECRET_ARN: ${{ secrets.DB_SECRET_ARN }}
           EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+          # RDS_ENDPOINT is "host:port" (Terraform's aws_db_instance.endpoint
+          # output format). Passed in to avoid needing rds:DescribeDBInstances
+          # on the EC2 instance role, and to make multi-DB setups predictable.
+          RDS_ENDPOINT: ${{ secrets.RDS_ENDPOINT }}
         run: |
           set -euo pipefail
 
@@ -169,10 +173,8 @@ jobs:
           DB_USER=$(echo "$DB_CREDS" | jq -r .username)
           DB_PASS=$(echo "$DB_CREDS" | jq -r .password)
 
-          RDS_ENDPOINT=$(aws rds describe-db-instances \
-            --query "DBInstances[0].Endpoint.Address" --output text)
-
-          DATABASE_URL="mysql2://${DB_USER}:${DB_PASS}@${RDS_ENDPOINT}:3306/rails_production"
+          # RDS_ENDPOINT already contains host:port; do not append :3306
+          DATABASE_URL="mysql2://${DB_USER}:${DB_PASS}@${RDS_ENDPOINT}/rails_production"
 
           # 60s timeout gives Rails time to finish in-flight requests
           docker stop -t 60 rails-app || true
@@ -202,7 +204,7 @@ jobs:
 
           # Substitute ONLY the runner-side vars; bash vars in the script
           # (DB_USER, DATABASE_URL, etc.) are left intact for the EC2.
-          envsubst '$ECR_REGISTRY $IMAGE $DB_SECRET_ARN' \
+          envsubst '$ECR_REGISTRY $IMAGE $DB_SECRET_ARN $RDS_ENDPOINT' \
             < /tmp/deploy.sh > /tmp/deploy.resolved.sh
 
           jq -n --rawfile script /tmp/deploy.resolved.sh \
