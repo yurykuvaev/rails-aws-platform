@@ -153,6 +153,9 @@ jobs:
           # output format). Passed in to avoid needing rds:DescribeDBInstances
           # on the EC2 instance role, and to make multi-DB setups predictable.
           RDS_ENDPOINT: ${{ secrets.RDS_ENDPOINT }}
+          # Required by Rails 7 in production to sign session cookies, signed
+          # cookies, and message verifiers. Generate with `SecureRandom.hex(64)`.
+          RAILS_SECRET_KEY_BASE: ${{ secrets.RAILS_SECRET_KEY_BASE }}
         run: |
           set -euo pipefail
 
@@ -185,6 +188,7 @@ jobs:
             --restart unless-stopped \
             -p 3000:3000 \
             -e DATABASE_URL="$DATABASE_URL" \
+            -e SECRET_KEY_BASE="$RAILS_SECRET_KEY_BASE" \
             -e RAILS_ENV=production \
             "$IMAGE"
 
@@ -204,7 +208,7 @@ jobs:
 
           # Substitute ONLY the runner-side vars; bash vars in the script
           # (DB_USER, DATABASE_URL, etc.) are left intact for the EC2.
-          envsubst '$ECR_REGISTRY $IMAGE $DB_SECRET_ARN $RDS_ENDPOINT' \
+          envsubst '$ECR_REGISTRY $IMAGE $DB_SECRET_ARN $RDS_ENDPOINT $RAILS_SECRET_KEY_BASE' \
             < /tmp/deploy.sh > /tmp/deploy.resolved.sh
 
           jq -n --rawfile script /tmp/deploy.resolved.sh \
