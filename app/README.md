@@ -1,5 +1,7 @@
 # Pokemon Battle API
 
+[![App CI/CD](https://github.com/yurykuvaev/rails-aws-platform/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/yurykuvaev/rails-aws-platform/actions/workflows/deploy.yml)
+
 A minimal Rails 7 JSON API: turn-based Pokemon-style battles with persistent characters, XP, and leveling. Built as a learning sandbox for deployment pipelines and debug scenarios — there are deliberate quirks (race conditions, N+1 queries, imperfect cooldowns, small connection pool) to practice on.
 
 **Stack:** Rails 7.1 · Ruby 3.2 · MySQL 8 · Puma · RSpec · Docker.
