@@ -22,7 +22,13 @@ resource "aws_iam_role" "github_deploy" {
         Condition = {
           StringEquals = {
             "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-            "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:ref:refs/heads/main"
+            # Two subjects: the build job (no environment, runs on main)
+            # and the deploy job (uses environment: production). GitHub
+            # changes the OIDC `sub` claim depending on which is set.
+            "token.actions.githubusercontent.com:sub" = [
+              "repo:${var.github_repo}:ref:refs/heads/main",
+              "repo:${var.github_repo}:environment:production",
+            ]
           }
         }
       }
