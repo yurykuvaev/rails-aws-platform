@@ -12,6 +12,7 @@ on:
   pull_request:
     paths:
       - "app/**"
+  workflow_dispatch:
 
 # Prevent concurrent deploys to the same ref. A queued run waits rather
 # than cancelling so a mid-deploy run is never interrupted.
